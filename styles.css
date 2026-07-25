@@ -1,0 +1,29 @@
+.vaultbridge-status--error,
+.vaultbridge-danger {
+  color: var(--text-error);
+}
+
+.vaultbridge-status--warning {
+  color: var(--text-warning);
+}
+
+.vaultbridge-grid {
+  display: grid;
+  grid-template-columns: minmax(9rem, 1fr) 2fr;
+  gap: 0.5rem 1rem;
+}
+
+.vaultbridge-list {
+  max-height: 60vh;
+  overflow: auto;
+}
+
+.vaultbridge-operation {
+  border-bottom: 1px solid var(--background-modifier-border);
+  padding: 0.5rem 0;
+}
+
+.vaultbridge-code {
+  font-family: var(--font-monospace);
+  overflow-wrap: anywhere;
+}

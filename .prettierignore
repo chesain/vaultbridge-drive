@@ -1,0 +1,5 @@
+main.js
+dist/
+release/
+coverage/
+package-lock.json

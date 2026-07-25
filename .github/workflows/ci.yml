@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run format:check
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test:coverage
+      - run: npm run build
+      - run: npm run secret-scan
+      - run: npm audit --audit-level=high
+      - run: npm run package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vaultbridge-drive-release-candidate
+          path: |
+            release/vaultbridge-drive-*.zip
+            release/SHA256SUMS

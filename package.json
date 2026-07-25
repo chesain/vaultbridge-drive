@@ -1,0 +1,49 @@
+{
+  "name": "vaultbridge-drive",
+  "version": "0.9.3",
+  "description": "Least-privilege, recoverable Google Drive synchronization for Obsidian",
+  "type": "module",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc --noEmit && node esbuild.config.mjs production",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings=0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:unit": "vitest run tests/unit tests/property tests/security",
+    "test:integration": "vitest run tests/integration",
+    "test:coverage": "vitest run --coverage",
+    "audit": "npm audit --audit-level=high",
+    "secret-scan": "node scripts/secret-scan.mjs",
+    "package": "npm run build && node scripts/package.mjs",
+    "validate": "npm run format:check && npm run lint && npm run typecheck && npm run test && npm run build && npm run secret-scan"
+  },
+  "keywords": [
+    "obsidian",
+    "google-drive",
+    "sync",
+    "backup"
+  ],
+  "author": "VaultBridge Drive contributors",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@vitest/coverage-v8": "4.1.10",
+    "esbuild": "0.28.1",
+    "eslint": "9.39.1",
+    "fast-check": "4.9.0",
+    "obsidian": "1.13.1",
+    "prettier": "3.9.6",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.65.0",
+    "vitest": "4.1.10"
+  }
+}
