@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.4 - 2026-07-29
+
+- Run ordinary uploads, downloads, and renames automatically without a confirmation prompt.
+- Keep mandatory review for deletion, recovery, conflict, blocked, purge, and mass-deletion plans.
+- Block in-app editing during startup and foreground update checks, including desktop and iOS
+  resume.
+- Show persistent spinning, up-to-date, warning, and error sync status on desktop and mobile.
+
 ## 0.9.3 - 2026-07-25
 
 - Support Google desktop OAuth clients whose token endpoint requires the issued client secret.

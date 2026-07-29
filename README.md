@@ -3,7 +3,7 @@
 VaultBridge Drive is an unofficial Obsidian community plugin for least-privilege, recoverable,
 crash-safe Google Drive synchronization. It is designed to never silently discard divergent changes.
 
-> Release candidate 0.9.3. Live Google authorization and interactive Obsidian testing remain manual
+> Release candidate 0.9.4. Live Google authorization and interactive Obsidian testing remain manual
 > release gates; see [Known limitations](#known-limitations).
 
 ## Why this design
@@ -64,17 +64,23 @@ A maintained public client ID can be injected at build time later with
 2. Run **Connect Google Drive** and complete consent in the system browser. The account is stored in
    Obsidian Keychain.
 3. Select **Create remote vault**. The display name is only a label; VaultBridge creates a permanent
-   UUID.
-4. Run **Preview sync**, review incompatible paths and operations, then run **Sync now**.
+   UUID, starts the first safe sync automatically, and shows progress in the desktop status bar or
+   the floating mobile status chip.
 
-Startup sync is enabled by default. Change-triggered and periodic sync are disabled initially.
-Destructive previews are enabled.
+Ordinary uploads, downloads, and renames run without confirmation. Deletions, recovery moves,
+conflicts, blocked operations, permanent purges, and mass-deletion plans always require review.
+Change-triggered and periodic sync remain configurable.
 
 ## Second device
 
-On another desktop, connect with the same OAuth client configuration, select the registered remote
-vault, preview, and sync. An empty fresh device downloads remote files; it is not interpreted as a
-mass local deletion.
+On another desktop, connect with the same OAuth client configuration and select the registered
+remote vault. VaultBridge blocks in-app editing while it checks and downloads the remote state. An
+empty fresh device downloads remote files; it is not interpreted as a mass local deletion.
+
+Whenever Obsidian starts or returns to the foreground on desktop or mobile, VaultBridge performs the
+same guarded update check before editing resumes. If the check cannot finish because the device is
+offline or authentication needs attention, the editor is unlocked and the status indicator shows the
+failure instead of trapping the vault behind the blocker.
 
 ## Mobile pairing
 
@@ -139,6 +145,9 @@ content are not deleted automatically.
   uses a short-lived app-data lease plus manifest revision verification. This reduces collisions but
   is not a claim of distributed linearizability.
 - Mobile background execution is not assumed. Auto-sync runs while Obsidian is open.
+- Foreground protection blocks Obsidian's in-app editor during the remote check. Public plugin APIs
+  cannot prevent an external editor, filesystem process, or another plugin from changing vault
+  files.
 - Obsidian's public adapter reads a whole file into memory. Transfers are chunked to Drive after
   that read, but extremely large attachments remain memory-constrained on mobile.
 - Base file contents are not retained, so Conflict Center shows local/remote diff and reports when a

@@ -46,5 +46,10 @@ These require a temporary Google project and throwaway Obsidian vault:
 13. Revoke access at Google and confirm AUTH_REVOKED pauses sync without clearing on network
     failure.
 14. Review release ZIP contents and a fresh `npm audit`/secret scan.
+15. On desktop and iOS, background and foreground Obsidian; confirm editing is blocked during the
+    remote check, remote changes arrive before editing resumes, and failures unlock with a visible
+    status.
+16. Confirm the desktop status bar and mobile floating chip spin through active phases and settle
+    into up-to-date, warning, offline, or error states.
 
 Record manual results in `docs/TEST_RESULTS.md` before calling a build production-ready.

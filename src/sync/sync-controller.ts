@@ -86,6 +86,19 @@ export class SyncController {
     return this.current;
   }
 
+  async syncFresh(
+    options: { previewOnly?: boolean; manual?: boolean } = {},
+  ): Promise<SyncRunResult> {
+    while (this.current !== null) {
+      try {
+        await this.current;
+      } catch {
+        // A foreground check still needs a fresh attempt after an earlier run fails.
+      }
+    }
+    return this.sync(options);
+  }
+
   cancel(): void {
     this.abortController?.abort(new Error("Cancelled by user"));
   }
@@ -214,12 +227,7 @@ export class SyncController {
       }
 
       let confirmMassDeletion = false;
-      const destructive =
-        plan.tombstonesToCreate.length > 0 ||
-        plan.recoveries.length > 0 ||
-        plan.conflicts.length > 0 ||
-        plan.blockedOperations.length > 0;
-      if (destructive || settings.previewDestructive) {
+      if (requiresSafetyPreview(plan)) {
         const decision = await this.hooks.preview?.(plan);
         if (decision === undefined || !decision.proceed)
           throw cancelled("Synchronization preview was cancelled");
@@ -284,6 +292,16 @@ export class SyncController {
   private phase(phase: SyncPhase, detail?: string): void {
     this.hooks.onPhase?.(phase, detail);
   }
+}
+
+export function requiresSafetyPreview(plan: SyncPlan): boolean {
+  return (
+    plan.tombstonesToCreate.length > 0 ||
+    plan.recoveries.length > 0 ||
+    plan.purges.length > 0 ||
+    plan.conflicts.length > 0 ||
+    plan.blockedOperations.length > 0
+  );
 }
 
 function policyFrom(settings: VaultBridgeSettings) {

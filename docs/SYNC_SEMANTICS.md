@@ -43,3 +43,15 @@ A revision mismatch aborts and must re-plan. Retried destructive work checks mem
 postconditions. The Drive changes feed may optimize discovery but is never correctness-critical.
 
 The same valid planner inputs produce byte-identical operation ordering and IDs.
+
+## Automatic execution and foreground checks
+
+Plans containing only uploads, downloads, or renames execute without a confirmation prompt.
+Deletion/tombstone creation, recovery moves, conflicts, blocked operations, permanent purges, and
+mass-deletion thresholds always require explicit review.
+
+At startup and whenever Obsidian returns to the foreground, VaultBridge temporarily blocks in-app
+editing, fetches and validates the registry and remote manifest, plans against a fresh local scan,
+and applies safe remote changes before releasing the editor. The blocker is released on network or
+authentication failure so an offline device remains usable. The status indicator continues to show
+the resulting offline, action-required, conflict, or error state.

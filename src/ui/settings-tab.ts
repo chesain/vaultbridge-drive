@@ -13,6 +13,7 @@ export interface SettingsActions {
   forget(): Promise<void>;
   createVault(): Promise<void>;
   listVaults(): Promise<VaultIdentity[]>;
+  activeVaultChanged(): Promise<void>;
   sync(): Promise<void>;
   preview(): Promise<void>;
   history(): Promise<void>;
@@ -145,6 +146,7 @@ export class VaultBridgeSettingsTab extends PluginSettingTab {
         dropdown.setValue(settings.activeVaultId ?? "").onChange(async (value) => {
           settings.activeVaultId = value === "" ? null : value;
           await this.save(settings);
+          await this.actions.activeVaultChanged();
         });
       })
       .addButton((button) =>
@@ -178,10 +180,11 @@ export class VaultBridgeSettingsTab extends PluginSettingTab {
       .addButton((button) =>
         button.setButtonText("History").onClick(() => void this.actions.history()),
       );
-    toggle(containerEl, "Auto-sync on startup", settings.autoSyncOnStartup, async (value) => {
-      settings.autoSyncOnStartup = value;
-      await this.save(settings);
-    });
+    new Setting(containerEl)
+      .setName("Automatic startup and foreground sync")
+      .setDesc(
+        "VaultBridge checks and applies remote updates when Obsidian starts or returns to the foreground. Editing resumes after the check; pause auto-sync to disable it.",
+      );
     toggle(
       containerEl,
       "Auto-sync after local changes",
@@ -303,15 +306,11 @@ export class VaultBridgeSettingsTab extends PluginSettingTab {
       });
 
     new Setting(containerEl).setName("Safety").setHeading();
-    toggle(
-      containerEl,
-      "Preview destructive changes",
-      settings.previewDestructive,
-      async (value) => {
-        settings.previewDestructive = value;
-        await this.save(settings);
-      },
-    );
+    new Setting(containerEl)
+      .setName("Destructive sync review")
+      .setDesc(
+        "Always required for deletions, recovery moves, conflicts, blocked operations, and permanent purges. Ordinary uploads and downloads run automatically.",
+      );
     toggle(containerEl, "Dry-run mode", settings.dryRun, async (value) => {
       settings.dryRun = value;
       await this.save(settings);

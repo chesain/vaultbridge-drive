@@ -2,7 +2,7 @@ node_modules/
 main.js
 main.js.map
 coverage/
-release/*.zip
+release/
 .env
 *.log
 .DS_Store

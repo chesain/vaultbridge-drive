@@ -17,6 +17,7 @@ import { LocalStateStore } from "./storage/local-state-store";
 import { PluginCredentialBackend, PluginDataStore } from "./storage/plugin-data-store";
 import { SettingsStore } from "./storage/settings-store";
 import { AutoSyncScheduler } from "./sync/auto-sync";
+import { ForegroundSyncCoordinator } from "./sync/foreground-sync";
 import { SyncController } from "./sync/sync-controller";
 import type { OAuthCredentials, SyncPhase } from "./types/domain";
 import { SyncError } from "./types/sync-errors";
@@ -29,6 +30,7 @@ import {
 } from "./ui/modals";
 import { VaultBridgeSettingsTab, type SettingsActions } from "./ui/settings-tab";
 import { VaultBridgeStatusBar } from "./ui/status-bar";
+import { SyncActivationModal } from "./ui/sync-activation-modal";
 
 export default class VaultBridgeDrivePlugin extends Plugin {
   private dataStore!: PluginDataStore;
@@ -42,10 +44,14 @@ export default class VaultBridgeDrivePlugin extends Plugin {
   private logger!: Logger;
   private controller!: SyncController;
   private scheduler!: AutoSyncScheduler;
+  private foregroundSync!: ForegroundSyncCoordinator;
   private events = new EventQueue();
   private status!: VaultBridgeStatusBar;
+  private activationModal: SyncActivationModal | null = null;
+  private activationCheckInProgress = false;
   private http!: HttpFetch;
   private phase: SyncPhase = "idle";
+  private layoutReady = false;
 
   override async onload(): Promise<void> {
     this.dataStore = new PluginDataStore(this);
@@ -60,7 +66,9 @@ export default class VaultBridgeDrivePlugin extends Plugin {
     const settings = await this.settingsStore.load();
     this.logger = new Logger(settings.logLevel);
     this.oauth = new DesktopOAuthService(this.tokenManager);
-    this.status = new VaultBridgeStatusBar(this.addStatusBarItem());
+    this.status = new VaultBridgeStatusBar([
+      Platform.isMobileApp ? this.createMobileStatusIndicator() : this.addStatusBarItem(),
+    ]);
     const local = new ObsidianVaultAdapter(this.app.vault);
     this.controller = new SyncController(
       this.credentialStore,
@@ -75,8 +83,20 @@ export default class VaultBridgeDrivePlugin extends Plugin {
         onPhase: (phase, detail) => {
           this.phase = phase;
           this.status.setPhase(phase, detail);
+          this.activationModal?.setPhase(phase, detail);
         },
-        preview: (plan) => previewPlan(this.app, plan),
+        preview: async (plan) => {
+          const restoreActivationGate =
+            this.activationCheckInProgress && this.activationModal !== null;
+          if (restoreActivationGate) this.releaseActivationGate();
+          try {
+            return await previewPlan(this.app, plan);
+          } finally {
+            if (restoreActivationGate && this.activationCheckInProgress && this.layoutReady) {
+              this.openActivationGate(this.phase);
+            }
+          }
+        },
         onPlan: (plan) =>
           this.status.setSummary({
             local: plan.uploads.length + plan.remoteMoves.length,
@@ -89,6 +109,7 @@ export default class VaultBridgeDrivePlugin extends Plugin {
     );
     this.scheduler = new AutoSyncScheduler(this.controller, (id) => this.registerInterval(id));
     this.scheduler.configure(settings);
+    this.foregroundSync = new ForegroundSyncCoordinator(() => this.runActivationSync());
 
     const actions = this.actions();
     registerCommands(this, actions);
@@ -97,7 +118,20 @@ export default class VaultBridgeDrivePlugin extends Plugin {
     );
     this.registerVaultEvents();
     this.registerDomEvent(window, "online", () => {
-      void this.controller.sync().catch(() => undefined);
+      void this.foregroundSync.checkNow();
+    });
+    this.registerDomEvent(window, "blur", () => {
+      this.foregroundSync.markInactive();
+    });
+    this.registerDomEvent(window, "focus", () => {
+      if (document.visibilityState === "visible") void this.foregroundSync.activate();
+    });
+    this.registerDomEvent(document, "visibilitychange", () => {
+      if (document.visibilityState === "hidden") {
+        this.foregroundSync.markInactive();
+      } else {
+        void this.foregroundSync.activate();
+      }
     });
     this.registerDomEvent(window, "beforeunload", () => {
       void this.settingsStore.load().then((current) => {
@@ -107,10 +141,9 @@ export default class VaultBridgeDrivePlugin extends Plugin {
       });
     });
 
-    if (
-      !(await this.credentialStore.hasCredentials()) &&
-      (await this.legacyCredentialStore.hasCredentials())
-    ) {
+    const hasCredentials = await this.credentialStore.hasCredentials();
+    const hasLegacyCredentials = await this.legacyCredentialStore.hasCredentials();
+    if (!hasCredentials && hasLegacyCredentials) {
       this.phase = "locked";
       this.status.setPhase("locked", "Complete the one-time Keychain migration");
     }
@@ -122,14 +155,21 @@ export default class VaultBridgeDrivePlugin extends Plugin {
       this.status.setSummary({ lastSync: new Date(lastSuccess.finishedAt).toLocaleString() });
     }
     this.app.workspace.onLayoutReady(() => {
+      this.layoutReady = true;
+      if (!settings.paused && settings.activeVaultId !== null && hasCredentials) {
+        this.openActivationGate("scanning", "Checking Google Drive for changes");
+      }
       void this.finishStartup();
     });
   }
 
   override onunload(): void {
+    this.layoutReady = false;
+    this.activationCheckInProgress = false;
     this.scheduler.stop();
     this.oauth.cancel();
     this.controller.cancel();
+    this.releaseActivationGate();
     void this.legacyCredentialStore.lock();
   }
 
@@ -182,6 +222,7 @@ export default class VaultBridgeDrivePlugin extends Plugin {
       forget: commands.forget,
       createVault: () => this.createVault(),
       listVaults: () => this.controller.listRemoteVaults(),
+      activeVaultChanged: () => this.foregroundSync.checkNow(),
       sync: commands.sync,
       preview: commands.preview,
       history: commands.history,
@@ -198,7 +239,7 @@ export default class VaultBridgeDrivePlugin extends Plugin {
 
   private async finishStartup(): Promise<void> {
     await this.migrateLegacyCredentials();
-    await this.startupSync();
+    await this.foregroundSync.checkNow();
   }
 
   private registerVaultEvents(): void {
@@ -217,18 +258,35 @@ export default class VaultBridgeDrivePlugin extends Plugin {
     );
   }
 
-  private async startupSync(): Promise<void> {
-    const settings = await this.settingsStore.load();
-    if (
-      !settings.autoSyncOnStartup ||
-      settings.paused ||
-      !(await this.credentialStore.hasCredentials())
-    )
-      return;
-    await this.controller.sync().catch((error: unknown) => {
-      if (error instanceof SyncError && error.code === "CREDENTIAL_STORE_LOCKED")
+  private async runActivationSync(): Promise<void> {
+    if (!this.layoutReady) return;
+    this.activationCheckInProgress = true;
+    this.openActivationGate("scanning", "Checking Google Drive for changes");
+    try {
+      const settings = await this.settingsStore.load();
+      if (
+        settings.paused ||
+        settings.activeVaultId === null ||
+        !(await this.credentialStore.hasCredentials())
+      )
+        return;
+      await this.controller.syncFresh({ manual: true });
+    } catch (error) {
+      if (error instanceof SyncError && error.code === "CREDENTIAL_STORE_LOCKED") {
         this.status.setPhase("locked");
-    });
+      } else if (!(error instanceof SyncError && error.code === "USER_CANCELLED")) {
+        this.logger.warn("activation_sync_failed", { error });
+        new Notice(
+          error instanceof Error
+            ? `VaultBridge could not finish the update check: ${error.message}`
+            : "VaultBridge could not finish the update check",
+          8000,
+        );
+      }
+    } finally {
+      this.activationCheckInProgress = false;
+      this.releaseActivationGate();
+    }
   }
 
   private async connect(forceConsent: boolean): Promise<void> {
@@ -324,6 +382,7 @@ export default class VaultBridgeDrivePlugin extends Plugin {
       settings.vaultDisplayName = vault.displayName;
       await this.settingsStore.save(settings);
       new Notice(`Created remote vault “${vault.displayName}”`);
+      await this.foregroundSync.checkNow();
     });
   }
 
@@ -433,6 +492,7 @@ export default class VaultBridgeDrivePlugin extends Plugin {
       await this.settingsStore.save(settings);
       await this.loadAccountProfile();
       new Notice("Pairing imported and credentials saved in Obsidian Keychain");
+      await this.foregroundSync.checkNow();
     });
   }
 
@@ -549,6 +609,31 @@ export default class VaultBridgeDrivePlugin extends Plugin {
       this.logger.error("user_action_failed", { error });
       new Notice(error instanceof Error ? error.message : "VaultBridge action failed", 8000);
     }
+  }
+
+  private createMobileStatusIndicator(): HTMLElement {
+    const element = document.createElement("div");
+    element.className = "vaultbridge-status--mobile";
+    document.body.appendChild(element);
+    this.register(() => element.remove());
+    return element;
+  }
+
+  private openActivationGate(phase: SyncPhase, detail?: string): void {
+    if (this.activationModal !== null) {
+      this.activationModal.setPhase(phase, detail);
+      return;
+    }
+    const modal = new SyncActivationModal(this.app);
+    this.activationModal = modal;
+    modal.setPhase(phase, detail);
+    modal.open();
+  }
+
+  private releaseActivationGate(): void {
+    const modal = this.activationModal;
+    this.activationModal = null;
+    modal?.complete();
   }
 }
 

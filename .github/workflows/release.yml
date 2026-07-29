@@ -1,0 +1,213 @@
+name: Release prerelease
+
+on:
+  push:
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing exact X.Y.Z tag to publish
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prerelease:
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+    steps:
+      - name: Check out the tagged source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref:
+            ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', inputs.tag) ||
+            github.ref }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Verify release identity and versions
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          import { execFileSync } from "node:child_process";
+
+          const tag = process.env.RELEASE_TAG ?? "";
+          if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/u.test(tag)) {
+            throw new Error(`Release tag must be an exact X.Y.Z version, received: ${tag}`);
+          }
+
+          const manifest = JSON.parse(fs.readFileSync("manifest.json", "utf8"));
+          const packageJson = JSON.parse(fs.readFileSync("package.json", "utf8"));
+          const packageLock = JSON.parse(fs.readFileSync("package-lock.json", "utf8"));
+          const versions = JSON.parse(fs.readFileSync("versions.json", "utf8"));
+          const changelog = fs.readFileSync("CHANGELOG.md", "utf8");
+
+          if (manifest.id !== "vaultbridge-drive" || packageJson.name !== "vaultbridge-drive") {
+            throw new Error("The permanent plugin identity changed");
+          }
+          if (manifest.isDesktopOnly !== false) {
+            throw new Error("VaultBridge Drive must remain mobile-compatible");
+          }
+          if (manifest.version !== tag || packageJson.version !== tag) {
+            throw new Error(
+              `Tag ${tag} does not match manifest ${manifest.version} and package ${packageJson.version}`,
+            );
+          }
+          if (
+            packageLock.version !== tag ||
+            packageLock.packages?.[""]?.version !== tag
+          ) {
+            throw new Error(`package-lock.json is not synchronized to ${tag}`);
+          }
+          if (versions[tag] !== manifest.minAppVersion) {
+            throw new Error(`versions.json is not synchronized to ${tag}`);
+          }
+          const escapedTag = tag.replaceAll(".", "\\.");
+          if (!new RegExp(`^## ${escapedTag}(?:\\s|$)`, "mu").test(changelog)) {
+            throw new Error(`CHANGELOG.md has no ${tag} release heading`);
+          }
+
+          const tagCommit = execFileSync(
+            "git",
+            ["rev-parse", `refs/tags/${tag}^{commit}`],
+            { encoding: "utf8" },
+          ).trim();
+          const headCommit = execFileSync("git", ["rev-parse", "HEAD^{commit}"], {
+            encoding: "utf8",
+          }).trim();
+          if (tagCommit !== headCommit) {
+            throw new Error(`Checked-out commit does not match tag ${tag}`);
+          }
+
+          console.log(`Release metadata verified for ${tag}`);
+          NODE
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Validate, test, and build
+        run: npm run validate
+
+      - name: Audit dependencies
+        run: npm audit --audit-level=high
+
+      - name: Package release
+        run: npm run package
+
+      - name: Verify BRAT assets
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          import path from "node:path";
+
+          const tag = process.env.RELEASE_TAG ?? "";
+          const directory = path.join("release", `vaultbridge-drive-${tag}`);
+          const expected = ["main.js", "manifest.json", "styles.css"].sort();
+          const actual = fs.readdirSync(directory).sort();
+          if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+            throw new Error(`Unexpected release assets: ${actual.join(", ")}`);
+          }
+          for (const asset of expected) {
+            const target = path.join(directory, asset);
+            if (!fs.statSync(target).isFile() || fs.statSync(target).size === 0) {
+              throw new Error(`Release asset is missing or empty: ${target}`);
+            }
+          }
+          console.log(`Verified BRAT assets in ${directory}`);
+          NODE
+
+      - name: Create GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "A release already exists for $RELEASE_TAG; refusing to replace its assets."
+            exit 1
+          fi
+
+          release_directory="release/vaultbridge-drive-$RELEASE_TAG"
+          gh release create "$RELEASE_TAG" \
+            "$release_directory/main.js" \
+            "$release_directory/manifest.json" \
+            "$release_directory/styles.css" \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --title "VaultBridge Drive $RELEASE_TAG" \
+            --generate-notes \
+            --draft \
+            --prerelease
+
+          node --input-type=module <<'NODE'
+          import { execFileSync } from "node:child_process";
+
+          const tag = process.env.RELEASE_TAG ?? "";
+          const repository = process.env.GITHUB_REPOSITORY ?? "";
+          const release = JSON.parse(
+            execFileSync(
+              "gh",
+              [
+                "release",
+                "view",
+                tag,
+                "--repo",
+                repository,
+                "--json",
+                "assets,isDraft,isPrerelease,tagName",
+              ],
+              { encoding: "utf8" },
+            ),
+          );
+          const assets = release.assets.map((asset) => asset.name).sort();
+          const expected = ["main.js", "manifest.json", "styles.css"].sort();
+          if (
+            release.tagName !== tag ||
+            release.isDraft !== true ||
+            release.isPrerelease !== true ||
+            JSON.stringify(assets) !== JSON.stringify(expected)
+          ) {
+            throw new Error("Draft release verification failed; it will not be published");
+          }
+          NODE
+
+          gh release edit "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --draft=false \
+            --prerelease
+
+          node --input-type=module <<'NODE'
+          import { execFileSync } from "node:child_process";
+
+          const tag = process.env.RELEASE_TAG ?? "";
+          const repository = process.env.GITHUB_REPOSITORY ?? "";
+          const release = JSON.parse(
+            execFileSync(
+              "gh",
+              [
+                "release",
+                "view",
+                tag,
+                "--repo",
+                repository,
+                "--json",
+                "isDraft,isPrerelease",
+              ],
+              { encoding: "utf8" },
+            ),
+          );
+          if (release.isDraft !== false || release.isPrerelease !== true) {
+            throw new Error("Release was not published as a prerelease");
+          }
+          NODE

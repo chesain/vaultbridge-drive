@@ -9,8 +9,13 @@
 6. Run `npm run package` twice from clean installs and compare `SHA256SUMS`/ZIP content. ZIP
    metadata can vary by platform; the three uncompressed files must be byte-identical.
 7. Verify the archive contains only `main.js`, `manifest.json`, and `styles.css`.
-8. Tag the exact version without a `v` prefix and attach those three files plus the ZIP.
-9. Do not publish automatically unless release credentials and explicit authorization are available.
+8. Commit the reviewed version bump, then tag that exact commit with the version without a `v`
+   prefix.
+9. Push the commit and tag. The prerelease workflow repeats validation and packaging, verifies the
+   tag and synchronized metadata, uploads the three individual BRAT assets to a draft, and publishes
+   it as a prerelease only after those checks pass.
+10. A maintainer can rerun the workflow manually only for an existing exact version tag. The
+    workflow refuses to replace a release that already exists.
 
 Dependency updates use locked versions and a reviewed pull request. Security fixes take precedence;
 routine updates should remain small and retain the full test/manual matrix.
