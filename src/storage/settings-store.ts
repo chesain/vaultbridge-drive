@@ -45,6 +45,8 @@ export const DEFAULT_EXCLUSIONS = [
   ".obsidian/plugins/vaultbridge-drive/",
 ];
 
+export const MIN_CHANGE_DEBOUNCE_SECONDS = 1;
+
 export const DEFAULT_SETTINGS: VaultBridgeSettings = {
   googleClientId: process.env.VAULTBRIDGE_GOOGLE_CLIENT_ID ?? "",
   activeVaultId: null,
@@ -87,7 +89,7 @@ const settingsSchema = z
     deviceName: z.string().min(1).max(200),
     autoSyncOnStartup: z.boolean(),
     autoSyncAfterChanges: z.boolean(),
-    debounceSeconds: z.number().int().min(5).max(3600),
+    debounceSeconds: z.number().int().min(MIN_CHANGE_DEBOUNCE_SECONDS).max(3600),
     periodicSyncMinutes: z.number().int().min(0).max(10_080),
     verificationIntervalMinutes: z.number().int().min(5).max(43_200),
     syncOnClose: z.boolean(),

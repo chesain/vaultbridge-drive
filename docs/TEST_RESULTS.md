@@ -10,10 +10,10 @@ Executed in the build workspace on 2026-07-30 (America/Chicago):
 - Formatting check: passed.
 - ESLint: passed with zero warnings.
 - TypeScript type check: passed.
-- Vitest: 21 files passed, 172 tests passed, 0 failed.
+- Vitest: 22 files passed, 174 tests passed, 0 failed.
 - Required integration matrix: all 40 named scenarios passed.
 - Property tests: 750 generated cases across eight invariants passed.
-- V8 coverage: 58.62% statements, 55.43% branches, 54.59% functions, 60.89% lines.
+- V8 coverage: 59.19% statements, 55.82% branches, 55.35% functions, 61.46% lines.
 - Production esbuild bundle: passed.
 - Secret scan: 74 files scanned, no findings.
 - Production dependency audit (`npm audit --omit=dev --audit-level=high`): 0 vulnerabilities.

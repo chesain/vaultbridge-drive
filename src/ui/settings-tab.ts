@@ -1,5 +1,9 @@
 import { PluginSettingTab, Setting, type App, type Plugin } from "obsidian";
-import type { SettingsStore, VaultBridgeSettings } from "../storage/settings-store";
+import {
+  MIN_CHANGE_DEBOUNCE_SECONDS,
+  type SettingsStore,
+  type VaultBridgeSettings,
+} from "../storage/settings-store";
 import type { VaultIdentity } from "../types/domain";
 
 export interface SettingsActions {
@@ -198,12 +202,13 @@ export class VaultBridgeSettingsTab extends PluginSettingTab {
       containerEl,
       "Change debounce (seconds)",
       settings.debounceSeconds,
-      5,
+      MIN_CHANGE_DEBOUNCE_SECONDS,
       3600,
       async (value) => {
         settings.debounceSeconds = value;
         await this.save(settings);
       },
+      "Wait this long after the final local file event before syncing. Minimum: 1 second.",
     );
     numberSetting(
       containerEl,
@@ -440,8 +445,11 @@ function numberSetting(
   min: number,
   max: number,
   onChange: (value: number) => Promise<void>,
+  description?: string,
 ): void {
-  new Setting(container).setName(name).addText((text) => {
+  const setting = new Setting(container).setName(name);
+  if (description !== undefined) setting.setDesc(description);
+  setting.addText((text) => {
     text.inputEl.type = "number";
     text.inputEl.min = String(min);
     text.inputEl.max = String(max);

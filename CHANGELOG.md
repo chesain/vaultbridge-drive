@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.7 - 2026-07-30
+
+- Allow local-change auto-sync to use a one-second debounce.
+- Coalesce rapid Obsidian file events into one sync one second after the final event.
+
 ## 0.9.6 - 2026-07-30
 
 - Make startup and foreground activation perform a preview-only remote check in the background.
