@@ -50,6 +50,12 @@ Plans containing only uploads, downloads, or renames execute without a confirmat
 Deletion/tombstone creation, recovery moves, conflicts, blocked operations, permanent purges, and
 mass-deletion thresholds always require explicit review.
 
+Local-change auto-sync may race with continued typing. Before uploading a file, the executor
+verifies that its bytes still match the planner snapshot. A changed source supersedes that attempt:
+no stale manifest is committed, the condition does not enter failure backoff or require user action,
+and auto-sync waits for the configured debounce before scanning again. Hash mismatches found after
+upload or while verifying a download remain hard integrity failures.
+
 A local path occupied by a different logical object is considered safely vacated only when the plan
 contains exactly one matching file move to a valid, uniquely targeted destination that is currently
 empty after cross-platform case folding. Folder moves, case-only moves, occupied destinations,

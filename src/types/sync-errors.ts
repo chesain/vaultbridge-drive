@@ -13,6 +13,7 @@ export type SyncErrorCode =
   | "UPLOAD_FAILED"
   | "DOWNLOAD_FAILED"
   | "HASH_MISMATCH"
+  | "LOCAL_CHANGED"
   | "PERMISSION_DENIED"
   | "USER_CANCELLED"
   | "UNKNOWN";

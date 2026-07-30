@@ -1,6 +1,6 @@
 {
   "name": "vaultbridge-drive",
-  "version": "0.9.7",
+  "version": "0.9.8",
   "description": "Least-privilege, recoverable Google Drive synchronization for Obsidian",
   "type": "module",
   "main": "main.js",

@@ -70,6 +70,52 @@ describe("journaled executor", () => {
     expect((await stateStore.load()).journal).toBeUndefined();
   });
 
+  it("treats an upload source changed after scanning as a superseded sync", async () => {
+    const scannedBytes = new TextEncoder().encode("first edit");
+    const currentBytes = new TextEncoder().encode("newer edit");
+    const scannedHash = await sha256(scannedBytes);
+    const localState: LocalFileState = {
+      relativePath: "Editing.md",
+      objectType: "file",
+      byteSize: scannedBytes.byteLength,
+      modifiedAt: 1234,
+      contentHash: scannedHash,
+    };
+    const local = new MemoryLocal({ "Editing.md": currentBytes });
+    const committed: VaultManifest[] = [];
+    const stateStore = memoryStateStore();
+    const base = manifest(0);
+    const executor = new SyncExecutor(
+      local,
+      new MemoryRemote() as unknown as VaultDriveClient,
+      manifestStore(committed),
+      leaseManager(),
+      stateStore,
+    );
+
+    await expect(
+      executor.execute({
+        plan: planSync(planInput(base, base, [localState])),
+        remoteManifest: base,
+        localSnapshot: snapshot([localState]),
+        vault,
+        deviceId: DEVICE_ID,
+        policy,
+      }),
+    ).rejects.toMatchObject({
+      code: "LOCAL_CHANGED",
+      retrySafe: true,
+      userActionRequired: false,
+      dataAtRisk: false,
+    });
+
+    expect(committed).toHaveLength(0);
+    expect((await stateStore.load()).history.at(-1)).toMatchObject({
+      outcome: "cancelled",
+      message: "Synchronization superseded by newer local edits",
+    });
+  });
+
   it("stages, verifies, installs, and restores mtime for a remote file", async () => {
     const bytes = new TextEncoder().encode("remote");
     const hash = await sha256(bytes);

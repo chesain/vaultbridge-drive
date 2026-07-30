@@ -267,17 +267,20 @@ export class SyncExecutor {
     } catch (error) {
       const finishedAt = new Date();
       const cancelled = input.signal?.aborted === true;
+      const superseded = error instanceof SyncError && error.code === "LOCAL_CHANGED";
       const history = historyItem(
         journal,
         startedAt,
         finishedAt,
-        cancelled ? "cancelled" : "error",
+        cancelled || superseded ? "cancelled" : "error",
         input.plan,
         cancelled
           ? "Synchronization cancelled"
-          : error instanceof Error
-            ? error.message
-            : "Synchronization failed",
+          : superseded
+            ? "Synchronization superseded by newer local edits"
+            : error instanceof Error
+              ? error.message
+              : "Synchronization failed",
       );
       state.history.push(history);
       state.journal = journal;
@@ -360,7 +363,7 @@ export class SyncExecutor {
     }
     const bytes = new Uint8Array(await this.local.readBinary(operation.path));
     const expectedHash = local.contentHash ?? (await sha256(bytes));
-    if ((await sha256(bytes)) !== expectedHash) throw hashMismatch(operation.path);
+    if ((await sha256(bytes)) !== expectedHash) throw localChanged(operation.path);
     const created = await this.remote.uploadVaultFile(
       parentId,
       operation.logicalId,
@@ -660,6 +663,15 @@ function hashMismatch(path: string): SyncError {
     userActionRequired: true,
     resumable: true,
     dataAtRisk: true,
+  });
+}
+
+function localChanged(path: string): SyncError {
+  return new SyncError("LOCAL_CHANGED", `Local file changed during synchronization: ${path}`, {
+    retrySafe: true,
+    userActionRequired: false,
+    resumable: true,
+    dataAtRisk: false,
   });
 }
 

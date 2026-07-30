@@ -56,5 +56,8 @@ These require a temporary Google project and throwaway Obsidian vault:
 18. On desktop and iOS, introduce a remote download while the app is inactive. Confirm activation
     opens the editing guard only after discovery, performs a fresh pre-apply scan, applies the
     download, and still presents mandatory conflict or destructive review when required.
+19. With a one-second local-change debounce, resume typing while an upload begins. Confirm the stale
+    attempt is quietly superseded, no user-action error appears, and the latest stable content
+    uploads after the next quiet window.
 
 Record manual results in `docs/TEST_RESULTS.md` before calling a build production-ready.

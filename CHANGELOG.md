@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.8 - 2026-07-30
+
+- Treat a note changing during its upload as a normal superseded autosave attempt.
+- Quietly wait for the configured debounce and re-scan instead of showing a user-action error or
+  entering failure backoff.
+- Keep remote download and upload-verification hash mismatches as hard integrity errors.
+
 ## 0.9.7 - 2026-07-30
 
 - Allow local-change auto-sync to use a one-second debounce.

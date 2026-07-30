@@ -38,6 +38,9 @@ jobs:
           node-version: 20
           cache: npm
 
+      - name: Use the supported npm audit client
+        run: npm install --global npm@11.6.2
+
       - name: Verify release identity and versions
         run: |
           node --input-type=module <<'NODE'

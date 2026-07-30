@@ -1,5 +1,6 @@
 import type { SyncController } from "./sync-controller";
 import type { VaultBridgeSettings } from "../storage/settings-store";
+import { SyncError } from "../types/sync-errors";
 
 export class AutoSyncScheduler {
   private debounceTimer: number | null = null;
@@ -30,7 +31,11 @@ export class AutoSyncScheduler {
     if (this.debounceTimer !== null) window.clearTimeout(this.debounceTimer);
     this.debounceTimer = window.setTimeout(() => {
       this.debounceTimer = null;
-      void this.controller.sync().catch(() => undefined);
+      void this.controller.sync().catch((error: unknown) => {
+        if (error instanceof SyncError && error.code === "LOCAL_CHANGED") {
+          this.localChange(settings);
+        }
+      });
     }, settings.debounceSeconds * 1000);
   }
 

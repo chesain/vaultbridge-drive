@@ -275,14 +275,20 @@ export class SyncController {
       return { plan, committed: result.committed };
     } catch (error) {
       const syncError = asSyncError(error);
-      if (syncError.code === "USER_CANCELLED") this.phase("idle");
-      else if (syncError.code === "CREDENTIAL_STORE_LOCKED") this.phase("locked");
-      else if (syncError.code === "NETWORK_OFFLINE") this.phase("offline");
-      else if (syncError.userActionRequired) this.phase("action-required", syncError.message);
-      else this.phase("error", syncError.message);
-      this.consecutiveFailures += 1;
-      this.nextAllowedAt =
-        Date.now() + Math.min(30 * 60_000, 5_000 * 2 ** Math.min(this.consecutiveFailures, 8));
+      if (syncError.code === "LOCAL_CHANGED") {
+        this.phase("idle", "New local edits detected; retrying after they settle");
+        this.consecutiveFailures = 0;
+        this.nextAllowedAt = 0;
+      } else {
+        if (syncError.code === "USER_CANCELLED") this.phase("idle");
+        else if (syncError.code === "CREDENTIAL_STORE_LOCKED") this.phase("locked");
+        else if (syncError.code === "NETWORK_OFFLINE") this.phase("offline");
+        else if (syncError.userActionRequired) this.phase("action-required", syncError.message);
+        else this.phase("error", syncError.message);
+        this.consecutiveFailures += 1;
+        this.nextAllowedAt =
+          Date.now() + Math.min(30 * 60_000, 5_000 * 2 ** Math.min(this.consecutiveFailures, 8));
+      }
       throw syncError;
     } finally {
       this.abortController = null;

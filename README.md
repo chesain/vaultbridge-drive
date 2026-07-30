@@ -3,7 +3,7 @@
 VaultBridge Drive is an unofficial Obsidian community plugin for least-privilege, recoverable,
 crash-safe Google Drive synchronization. It is designed to never silently discard divergent changes.
 
-> Release candidate 0.9.7. Live Google authorization and interactive Obsidian testing remain manual
+> Release candidate 0.9.8. Live Google authorization and interactive Obsidian testing remain manual
 > release gates; see [Known limitations](#known-limitations).
 
 ## Why this design
@@ -70,7 +70,9 @@ A maintained public client ID can be injected at build time later with
 Ordinary uploads, downloads, and renames run without confirmation. Deletions, recovery moves,
 conflicts, blocked operations, permanent purges, and mass-deletion plans always require review.
 Change-triggered and periodic sync remain configurable. Local-change debounce can be set as low as
-one second; rapid file events are combined into one sync after the final event.
+one second; rapid file events are combined into one sync after the final event. If editing resumes
+after a scan begins, VaultBridge discards that stale upload attempt and quietly retries after the
+next quiet window.
 
 ## Second device
 
