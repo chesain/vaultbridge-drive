@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { manifest, planInput, local, entry, tombstone } from "../fixtures/builders";
+import { HASH_B, HASH_C, manifest, planInput, local, entry, tombstone } from "../fixtures/builders";
 import { planSync } from "../../src/sync/planner";
 import { requiresSafetyPreview } from "../../src/sync/sync-controller";
-import { hasHardBlockedOperations } from "../../src/sync/sync-plan";
+import { hasHardBlockedOperations, hasIncomingRemoteChanges } from "../../src/sync/sync-plan";
 
 describe("automatic sync safety preview", () => {
   it("allows ordinary uploads and downloads to run without prompting", () => {
@@ -56,5 +56,32 @@ describe("automatic sync safety preview", () => {
     expect(hasHardBlockedOperations(conflict)).toBe(false);
     expect(hasHardBlockedOperations(purge)).toBe(false);
     expect(hasHardBlockedOperations(blocked)).toBe(true);
+  });
+
+  it("distinguishes incoming remote mutations from outgoing-only work", () => {
+    const upload = planSync(planInput(manifest(0), manifest(0), [local("Local.md")]));
+    const download = planSync(
+      planInput(manifest(0), manifest(1, [entry("remote01", "Remote.md")]), []),
+    );
+    const base = manifest(1, [entry("remote01", "Old.md")]);
+    const remoteRename = planSync(
+      planInput(
+        base,
+        manifest(2, [entry("remote01", "New.md", undefined, { remoteRevision: 2 })]),
+        [local("Old.md")],
+      ),
+    );
+    const outgoingDeletion = planSync(planInput(base, base, []));
+    const remoteConflict = planSync(
+      planInput(base, manifest(2, [entry("remote01", "Old.md", HASH_B)]), [
+        local("Old.md", HASH_C),
+      ]),
+    );
+
+    expect(hasIncomingRemoteChanges(upload)).toBe(false);
+    expect(hasIncomingRemoteChanges(download)).toBe(true);
+    expect(hasIncomingRemoteChanges(remoteRename)).toBe(true);
+    expect(hasIncomingRemoteChanges(outgoingDeletion)).toBe(false);
+    expect(hasIncomingRemoteChanges(remoteConflict)).toBe(true);
   });
 });

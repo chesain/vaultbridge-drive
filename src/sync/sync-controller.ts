@@ -204,7 +204,7 @@ export class SyncController {
         baseManifest: base,
         remoteManifest: remoteRead.manifest,
         localSnapshot: scan.snapshot,
-        pendingLocalEvents: this.events.drain(),
+        pendingLocalEvents: options.previewOnly === true ? this.events.peek() : this.events.drain(),
         deviceId: state.deviceId,
         policy: policyFrom(settings),
       });

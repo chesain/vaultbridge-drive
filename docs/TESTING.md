@@ -46,16 +46,15 @@ These require a temporary Google project and throwaway Obsidian vault:
 13. Revoke access at Google and confirm AUTH_REVOKED pauses sync without clearing on network
     failure.
 14. Review release ZIP contents and a fresh `npm audit`/secret scan.
-15. On desktop and iOS, background and foreground Obsidian; confirm editing is blocked during the
-    remote check, remote changes arrive before editing resumes, and failures unlock with a visible
-    status.
+15. On desktop and iOS, background and foreground Obsidian; confirm the initial pull probe runs with
+    only the spinning status indicator and no popup when there is no incoming work.
 16. Confirm the desktop status bar and mobile floating chip spin through active phases and settle
     into up-to-date, warning, offline, or error states.
 17. Reproduce a preserved conflict object on one device, then resume a stale second device. Confirm
     a unique file rename can vacate the original path before its replacement download, while rename
     swaps and occupied destinations remain blocked.
-18. On iOS, confirm routine foreground checks show only the corner status chip, block editor input
-    without a full-size modal, and still present a modal for mandatory conflict or destructive
-    review.
+18. On desktop and iOS, introduce a remote download while the app is inactive. Confirm activation
+    opens the editing guard only after discovery, performs a fresh pre-apply scan, applies the
+    download, and still presents mandatory conflict or destructive review when required.
 
 Record manual results in `docs/TEST_RESULTS.md` before calling a build production-ready.

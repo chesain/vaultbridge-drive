@@ -56,12 +56,15 @@ empty after cross-platform case folding. Folder moves, case-only moves, occupied
 multiple destinations, chains, and swaps remain blocked. This mirrors the executor ordering: file
 moves complete before staged downloads are installed.
 
-At startup and whenever Obsidian returns to the foreground, VaultBridge temporarily blocks in-app
-editing, fetches and validates the registry and remote manifest, plans against a fresh local scan,
-and applies safe remote changes before releasing the editor. The blocker is released on network or
-authentication failure so an offline device remains usable. The status indicator continues to show
-the resulting offline, action-required, conflict, or error state.
+At startup and whenever Obsidian returns to the foreground, VaultBridge performs a preview-only pull
+probe in the background. The probe fetches and validates the registry and remote manifest and plans
+against a fresh local scan, but does not consume queued rename evidence or execute outgoing work. If
+there is no incoming remote mutation, the probe stops without a popup.
 
-Desktop uses a non-dismissible progress modal for this guard. iOS uses a transparent interaction
-shield and the persistent corner status chip, avoiding a routine full-size popup. Mandatory safety
-review remains modal on both platforms.
+If the probe finds a download, remote rename, remote recovery mutation, or conflict caused by a
+newer remote revision, VaultBridge opens a non-dismissible editing guard and performs a second fresh
+scan before applying anything. This closes the local-edit race between discovery and application.
+Outgoing-only work is left for the normal sync paths, where mandatory deletion, recovery, conflict,
+blocked-operation, purge, and mass-deletion review remains in force. Network or authentication
+failure never leaves the editor trapped behind the guard, and the status indicator shows the
+resulting state.

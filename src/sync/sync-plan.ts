@@ -104,3 +104,15 @@ export function hardBlockedOperations(plan: SyncPlan): BlockedOperation[] {
 export function hasHardBlockedOperations(plan: SyncPlan): boolean {
   return hardBlockedOperations(plan).length > 0;
 }
+
+export function hasIncomingRemoteChanges(plan: SyncPlan): boolean {
+  return (
+    plan.downloads.length > 0 ||
+    plan.localMoves.length > 0 ||
+    (plan.remoteRevision > plan.baseRevision && plan.conflicts.length > 0) ||
+    plan.recoveries.some(
+      (operation) =>
+        operation.direction === "local-to-recovery" || operation.direction === "restore-local",
+    )
+  );
+}

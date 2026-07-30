@@ -22,4 +22,15 @@ describe("local event queue", () => {
     queue.enqueue({ type: "rename", oldPath: "old.md", path: "new.md", at: 2 });
     expect(queue.drain()).toEqual([{ type: "rename", oldPath: "old.md", path: "new.md", at: 2 }]);
   });
+
+  it("allows a foreground probe to inspect events without consuming them", () => {
+    const queue = new EventQueue();
+    const event = { type: "rename", oldPath: "old.md", path: "new.md", at: 2 } as const;
+    queue.enqueue(event);
+
+    expect(queue.peek()).toEqual([event]);
+    expect(queue.peek()).toEqual([event]);
+    expect(queue.drain()).toEqual([event]);
+    expect(queue.size).toBe(0);
+  });
 });

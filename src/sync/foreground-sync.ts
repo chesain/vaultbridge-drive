@@ -1,3 +1,21 @@
+import type { SyncRunResult } from "./sync-controller";
+import { hasIncomingRemoteChanges, type SyncPlan } from "./sync-plan";
+
+export interface ForegroundPullCheckHooks {
+  onIncomingRemoteChanges?: (plan: SyncPlan) => void;
+}
+
+export async function runForegroundPullCheck(
+  syncFresh: (options: { previewOnly?: boolean; manual?: boolean }) => Promise<SyncRunResult>,
+  hooks: ForegroundPullCheckHooks = {},
+): Promise<{ probe: SyncRunResult; applied: SyncRunResult | null }> {
+  const probe = await syncFresh({ previewOnly: true, manual: true });
+  const incomingRemoteChanges = hasIncomingRemoteChanges(probe.plan);
+  if (!incomingRemoteChanges) return { probe, applied: null };
+  if (incomingRemoteChanges) hooks.onIncomingRemoteChanges?.(probe.plan);
+  return { probe, applied: await syncFresh({ manual: true }) };
+}
+
 export class ForegroundSyncCoordinator {
   private inactive = false;
   private current: Promise<void> | null = null;

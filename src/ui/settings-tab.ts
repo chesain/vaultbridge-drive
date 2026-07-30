@@ -183,7 +183,7 @@ export class VaultBridgeSettingsTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("Automatic startup and foreground sync")
       .setDesc(
-        "VaultBridge checks and applies remote updates when Obsidian starts or returns to the foreground. Editing resumes after the check; pause auto-sync to disable it.",
+        "VaultBridge quietly checks for remote updates when Obsidian starts or returns to the foreground. It blocks editing only after incoming changes are found and while a fresh scan applies them; pause auto-sync to disable it.",
       );
     toggle(
       containerEl,

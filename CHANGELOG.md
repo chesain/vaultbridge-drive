@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.6 - 2026-07-30
+
+- Make startup and foreground activation perform a preview-only remote check in the background.
+- Show the editing guard only after incoming remote changes are found, then re-scan before applying
+  them.
+- Keep queued rename evidence intact during the background probe and leave outgoing work for the
+  normal guarded sync paths.
+
 ## 0.9.5 - 2026-07-30
 
 - Allow a proven one-to-one file rename to vacate a path before a different remote logical object

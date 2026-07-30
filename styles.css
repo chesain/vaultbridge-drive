@@ -30,15 +30,6 @@
   z-index: var(--layer-popover, 30);
 }
 
-.vaultbridge-activation-shield {
-  background: transparent;
-  cursor: wait;
-  inset: 0;
-  position: fixed;
-  touch-action: none;
-  z-index: calc(var(--layer-popover, 30) - 1);
-}
-
 .vaultbridge-status--error,
 .vaultbridge-danger {
   color: var(--text-error);

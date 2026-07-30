@@ -17,7 +17,7 @@ import { LocalStateStore } from "./storage/local-state-store";
 import { PluginCredentialBackend, PluginDataStore } from "./storage/plugin-data-store";
 import { SettingsStore } from "./storage/settings-store";
 import { AutoSyncScheduler } from "./sync/auto-sync";
-import { ForegroundSyncCoordinator } from "./sync/foreground-sync";
+import { ForegroundSyncCoordinator, runForegroundPullCheck } from "./sync/foreground-sync";
 import { SyncController } from "./sync/sync-controller";
 import type { OAuthCredentials, SyncPhase } from "./types/domain";
 import { SyncError } from "./types/sync-errors";
@@ -31,7 +31,6 @@ import {
 import { VaultBridgeSettingsTab, type SettingsActions } from "./ui/settings-tab";
 import { VaultBridgeStatusBar } from "./ui/status-bar";
 import { SyncActivationModal } from "./ui/sync-activation-modal";
-import { SyncActivationShield } from "./ui/sync-activation-shield";
 
 export default class VaultBridgeDrivePlugin extends Plugin {
   private dataStore!: PluginDataStore;
@@ -48,7 +47,7 @@ export default class VaultBridgeDrivePlugin extends Plugin {
   private foregroundSync!: ForegroundSyncCoordinator;
   private events = new EventQueue();
   private status!: VaultBridgeStatusBar;
-  private activationGate: SyncActivationModal | SyncActivationShield | null = null;
+  private activationGate: SyncActivationModal | null = null;
   private activationCheckInProgress = false;
   private http!: HttpFetch;
   private phase: SyncPhase = "idle";
@@ -157,9 +156,6 @@ export default class VaultBridgeDrivePlugin extends Plugin {
     }
     this.app.workspace.onLayoutReady(() => {
       this.layoutReady = true;
-      if (!settings.paused && settings.activeVaultId !== null && hasCredentials) {
-        this.openActivationGate("scanning", "Checking Google Drive for changes");
-      }
       void this.finishStartup();
     });
   }
@@ -262,7 +258,6 @@ export default class VaultBridgeDrivePlugin extends Plugin {
   private async runActivationSync(): Promise<void> {
     if (!this.layoutReady) return;
     this.activationCheckInProgress = true;
-    this.openActivationGate("scanning", "Checking Google Drive for changes");
     try {
       const settings = await this.settingsStore.load();
       if (
@@ -271,7 +266,16 @@ export default class VaultBridgeDrivePlugin extends Plugin {
         !(await this.credentialStore.hasCredentials())
       )
         return;
-      await this.controller.syncFresh({ manual: true });
+      const result = await runForegroundPullCheck((options) => this.controller.syncFresh(options), {
+        onIncomingRemoteChanges: () =>
+          this.openActivationGate(
+            "scanning",
+            "Remote updates found; rechecking before applying them",
+          ),
+      });
+      if (result.applied === null && this.phase === "idle") {
+        this.status.setPhase("idle", "Remote check complete; no downloads found");
+      }
     } catch (error) {
       if (error instanceof SyncError && error.code === "CREDENTIAL_STORE_LOCKED") {
         this.status.setPhase("locked");
@@ -625,9 +629,7 @@ export default class VaultBridgeDrivePlugin extends Plugin {
       this.activationGate.setPhase(phase, detail);
       return;
     }
-    const gate = Platform.isMobileApp
-      ? new SyncActivationShield(document)
-      : new SyncActivationModal(this.app);
+    const gate = new SyncActivationModal(this.app);
     this.activationGate = gate;
     gate.setPhase(phase, detail);
     gate.open();
