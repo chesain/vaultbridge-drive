@@ -51,5 +51,11 @@ These require a temporary Google project and throwaway Obsidian vault:
     status.
 16. Confirm the desktop status bar and mobile floating chip spin through active phases and settle
     into up-to-date, warning, offline, or error states.
+17. Reproduce a preserved conflict object on one device, then resume a stale second device. Confirm
+    a unique file rename can vacate the original path before its replacement download, while rename
+    swaps and occupied destinations remain blocked.
+18. On iOS, confirm routine foreground checks show only the corner status chip, block editor input
+    without a full-size modal, and still present a modal for mandatory conflict or destructive
+    review.
 
 Record manual results in `docs/TEST_RESULTS.md` before calling a build production-ready.

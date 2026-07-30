@@ -96,3 +96,11 @@ export interface SyncPlan {
   warnings: SyncWarning[];
   blockedOperations: BlockedOperation[];
 }
+
+export function hardBlockedOperations(plan: SyncPlan): BlockedOperation[] {
+  return plan.blockedOperations.filter((operation) => !operation.requiresConfirmation);
+}
+
+export function hasHardBlockedOperations(plan: SyncPlan): boolean {
+  return hardBlockedOperations(plan).length > 0;
+}

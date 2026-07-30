@@ -526,6 +526,7 @@ function addCrossLogicalPathCollisions(
   remote: Record<string, ManifestEntry>,
   input: PlanInput,
 ): void {
+  const projectedPaths = safelyProjectedLocalFilePaths(plan, local);
   const remoteByFold = new Map<string, ManifestEntry[]>();
   for (const entry of Object.values(remote)) {
     const folded = validateRelativePath(entry.relativePath).caseFolded;
@@ -535,20 +536,21 @@ function addCrossLogicalPathCollisions(
   }
   const existing = new Set(plan.conflicts.map((conflict) => conflict.operationId));
   for (const [logicalId, state] of Object.entries(local)) {
-    const folded = validateRelativePath(state.relativePath).caseFolded;
+    const projectedPath = projectedPaths.get(logicalId) ?? state.relativePath;
+    const folded = validateRelativePath(projectedPath).caseFolded;
     for (const remoteEntry of remoteByFold.get(folded) ?? []) {
       if (remoteEntry.logicalId === logicalId) continue;
-      const operationId = opId("conflict-path-collision", logicalId, state.relativePath);
+      const operationId = opId("conflict-path-collision", logicalId, projectedPath);
       if (existing.has(operationId)) continue;
       plan.conflicts.push({
         operationId,
         logicalId,
-        path: state.relativePath,
+        path: projectedPath,
         kind: "path-collision",
         localPath: state.relativePath,
         remotePath: remoteEntry.relativePath,
         conflictPath: conflictPath(
-          state.relativePath,
+          projectedPath,
           logicalId,
           input.policy,
           input.policy.conflictTimestamp ?? input.remoteManifest.updatedAt,
@@ -558,13 +560,73 @@ function addCrossLogicalPathCollisions(
       });
       plan.blockedOperations.push({
         code: "PATH_COLLISION_REVIEW",
-        path: state.relativePath,
+        path: projectedPath,
         message: "Two different logical objects use the same cross-platform path",
         requiresConfirmation: false,
       });
       existing.add(operationId);
     }
   }
+}
+
+function safelyProjectedLocalFilePaths(
+  plan: SyncPlan,
+  local: Record<string, LocalFileState>,
+): Map<string, string> {
+  const occupantsByFold = new Map<string, Set<string>>();
+  for (const [logicalId, state] of Object.entries(local)) {
+    const folded = validateRelativePath(state.relativePath).caseFolded;
+    const occupants = occupantsByFold.get(folded) ?? new Set<string>();
+    occupants.add(logicalId);
+    occupantsByFold.set(folded, occupants);
+  }
+
+  const movesByLogicalId = new Map<string, typeof plan.localMoves>();
+  const destinationCounts = new Map<string, number>();
+  for (const move of plan.localMoves) {
+    const moves = movesByLogicalId.get(move.logicalId) ?? [];
+    moves.push(move);
+    movesByLogicalId.set(move.logicalId, moves);
+    if (move.fromPath.length === 0) continue;
+    const destination = validateRelativePath(move.toPath);
+    destinationCounts.set(
+      destination.caseFolded,
+      (destinationCounts.get(destination.caseFolded) ?? 0) + 1,
+    );
+  }
+
+  const projected = new Map<string, string>();
+  for (const [logicalId, state] of Object.entries(local)) {
+    const moves = movesByLogicalId.get(logicalId) ?? [];
+    if (state.objectType !== "file" || moves.length !== 1) continue;
+    const move = moves[0]!;
+    if (
+      move.objectType !== "file" ||
+      move.fromPath !== state.relativePath ||
+      move.toPath === move.fromPath
+    )
+      continue;
+
+    const source = validateRelativePath(move.fromPath);
+    const destination = validateRelativePath(move.toPath);
+    if (
+      !source.valid ||
+      !destination.valid ||
+      source.caseFolded === destination.caseFolded ||
+      destinationCounts.get(destination.caseFolded) !== 1
+    )
+      continue;
+
+    const destinationOccupants = occupantsByFold.get(destination.caseFolded);
+    if (
+      destinationOccupants !== undefined &&
+      [...destinationOccupants].some((occupant) => occupant !== logicalId)
+    )
+      continue;
+
+    projected.set(logicalId, destination.normalized);
+  }
+  return projected;
 }
 
 function addMassDeletionGuard(plan: SyncPlan, tracked: number, input: PlanInput): void {

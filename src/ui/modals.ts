@@ -1,7 +1,7 @@
 import { Modal, Notice, Setting, TextAreaComponent, type App } from "obsidian";
 import { redact } from "../logging/redaction";
 import type { SyncHistoryItem, TombstoneEntry } from "../types/domain";
-import type { ConflictOperation, SyncPlan } from "../sync/sync-plan";
+import { hasHardBlockedOperations, type ConflictOperation, type SyncPlan } from "../sync/sync-plan";
 import type { ConflictResolution } from "../sync/conflict-resolution";
 
 export class TextPromptModal extends Modal {
@@ -86,6 +86,7 @@ export class SyncPreviewModal extends Modal {
       ["Conflict", this.plan.conflicts],
       ["Recover", this.plan.recoveries],
       ["Delete", this.plan.tombstonesToCreate],
+      ["Purge", this.plan.purges],
       ["Blocked", this.plan.blockedOperations],
       ["Warning", this.plan.warnings],
     ];
@@ -103,6 +104,13 @@ export class SyncPreviewModal extends Modal {
     const massBlock = this.plan.blockedOperations.some(
       (operation) => operation.code === "MASS_DELETION_BLOCKED",
     );
+    const hardBlock = hasHardBlockedOperations(this.plan);
+    if (hardBlock) {
+      this.contentEl.createEl("p", {
+        cls: "vaultbridge-danger",
+        text: "Sync cannot run while hard-blocked paths remain. Cancel, resolve the listed path or type collision, then preview again.",
+      });
+    }
     if (massBlock) {
       new Setting(this.contentEl)
         .setName("I reviewed and confirm this mass deletion")
@@ -117,18 +125,20 @@ export class SyncPreviewModal extends Modal {
         }),
       )
       .addButton((button) => button.setButtonText("Cancel").onClick(() => this.finish(false)))
-      .addButton((button) =>
-        button
-          .setCta()
-          .setButtonText("Run sync")
-          .onClick(() => {
+      .addButton((button) => {
+        button.setCta().setButtonText(hardBlock ? "Sync blocked" : "Run sync");
+        if (hardBlock) {
+          button.setDisabled(true);
+        } else {
+          button.onClick(() => {
             if (massBlock && !this.massConfirmed) {
               new Notice("Confirm the mass-deletion warning first");
               return;
             }
             this.finish(true);
-          }),
-      );
+          });
+        }
+      });
   }
 
   override onClose(): void {
@@ -239,23 +249,30 @@ export class ConflictCenterModal extends Modal {
     const row = this.contentEl.createDiv({ cls: "vaultbridge-operation" });
     row.createEl("h3", { text: conflict.path });
     row.createEl("p", { text: conflict.reason });
-    new Setting(row)
-      .addButton((button) =>
-        button.setButtonText("Show diff").onClick(async () => {
-          const content = await this.actions.load(conflict);
-          const pre = row.createEl("pre", { cls: "vaultbridge-code" });
-          pre.setText(
-            lineDiff(
-              content.local ?? "(local unavailable)",
-              content.remote ?? "(remote unavailable)",
-            ),
-          );
-          if (content.base === undefined)
-            row.createEl("small", {
-              text: "Base content is unavailable; hashes still protect change classification.",
-            });
-        }),
-      )
+    const actions = new Setting(row).addButton((button) =>
+      button.setButtonText("Show diff").onClick(async () => {
+        const content = await this.actions.load(conflict);
+        const pre = row.createEl("pre", { cls: "vaultbridge-code" });
+        pre.setText(
+          lineDiff(
+            content.local ?? "(local unavailable)",
+            content.remote ?? "(remote unavailable)",
+          ),
+        );
+        if (content.base === undefined)
+          row.createEl("small", {
+            text: "Base content is unavailable; hashes still protect change classification.",
+          });
+      }),
+    );
+    if (conflict.kind === "path-collision" || conflict.kind === "type-collision") {
+      row.createEl("p", {
+        cls: "vaultbridge-danger",
+        text: "This collision cannot be mediated by choosing a version. Rename one of the colliding paths or correct the file/folder type, then run Preview again.",
+      });
+      return;
+    }
+    actions
       .addButton((button) =>
         button
           .setButtonText("Keep local")

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { manifest, planInput, local, entry, tombstone } from "../fixtures/builders";
 import { planSync } from "../../src/sync/planner";
 import { requiresSafetyPreview } from "../../src/sync/sync-controller";
+import { hasHardBlockedOperations } from "../../src/sync/sync-plan";
 
 describe("automatic sync safety preview", () => {
   it("allows ordinary uploads and downloads to run without prompting", () => {
@@ -46,11 +47,14 @@ describe("automatic sync safety preview", () => {
       code: "PATH_BLOCKED",
       path: "Blocked.md",
       message: "Path requires review",
-      requiresConfirmation: true,
+      requiresConfirmation: false,
     });
 
     expect(requiresSafetyPreview(conflict)).toBe(true);
     expect(requiresSafetyPreview(purge)).toBe(true);
     expect(requiresSafetyPreview(blocked)).toBe(true);
+    expect(hasHardBlockedOperations(conflict)).toBe(false);
+    expect(hasHardBlockedOperations(purge)).toBe(false);
+    expect(hasHardBlockedOperations(blocked)).toBe(true);
   });
 });

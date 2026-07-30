@@ -1,7 +1,7 @@
 {
   "id": "vaultbridge-drive",
   "name": "VaultBridge Drive",
-  "version": "0.9.4",
+  "version": "0.9.5",
   "minAppVersion": "1.11.4",
   "description": "Least-privilege, recoverable, crash-safe Google Drive synchronization.",
   "author": "VaultBridge Drive contributors",

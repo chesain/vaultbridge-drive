@@ -3,7 +3,7 @@
 VaultBridge Drive is an unofficial Obsidian community plugin for least-privilege, recoverable,
 crash-safe Google Drive synchronization. It is designed to never silently discard divergent changes.
 
-> Release candidate 0.9.4. Live Google authorization and interactive Obsidian testing remain manual
+> Release candidate 0.9.5. Live Google authorization and interactive Obsidian testing remain manual
 > release gates; see [Known limitations](#known-limitations).
 
 ## Why this design
@@ -81,6 +81,10 @@ Whenever Obsidian starts or returns to the foreground on desktop or mobile, Vaul
 same guarded update check before editing resumes. If the check cannot finish because the device is
 offline or authentication needs attention, the editor is unlocked and the status indicator shows the
 failure instead of trapping the vault behind the blocker.
+
+On iOS, the foreground guard is a transparent interaction shield rather than a modal: the bottom
+corner status chip remains visible while touch, keyboard, paste, and editor input are temporarily
+blocked. Mandatory destructive or conflict review still uses an explicit dialog.
 
 ## Mobile pairing
 

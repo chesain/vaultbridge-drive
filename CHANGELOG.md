@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.5 - 2026-07-30
+
+- Allow a proven one-to-one file rename to vacate a path before a different remote logical object
+  downloads into it.
+- Keep ambiguous moves, folder moves, case-only moves, occupied destinations, rename chains, and
+  swaps collision-blocked.
+- Disable sync execution for hard-blocked previews and give explicit collision-resolution guidance.
+- Replace the routine iOS foreground modal with a quiet editing shield while retaining the mobile
+  corner status indicator.
+
 ## 0.9.4 - 2026-07-29
 
 - Run ordinary uploads, downloads, and renames automatically without a confirmation prompt.

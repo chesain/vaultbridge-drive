@@ -17,7 +17,7 @@ import type { LeaseManager } from "../drive/lease-manager";
 import type { ManifestStore } from "../manifest/manifest-store";
 import { validateManifest } from "../manifest/manifest-schema";
 import type { LocalStateStore } from "../storage/local-state-store";
-import type { SyncPlan, UploadOperation } from "./sync-plan";
+import { hardBlockedOperations, type SyncPlan, type UploadOperation } from "./sync-plan";
 import { createJournal, markJournalOperation } from "./transaction-journal";
 import { createTombstone } from "../recovery/tombstones";
 
@@ -288,7 +288,7 @@ export class SyncExecutor {
   }
 
   private assertPlanExecutable(input: ExecuteInput): void {
-    const hard = input.plan.blockedOperations.filter((item) => !item.requiresConfirmation);
+    const hard = hardBlockedOperations(input.plan);
     const mass = input.plan.blockedOperations.filter(
       (item) => item.code === "MASS_DELETION_BLOCKED",
     );

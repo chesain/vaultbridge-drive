@@ -3,6 +3,7 @@ import { planSync } from "../../src/sync/planner";
 import {
   HASH_A,
   HASH_B,
+  HASH_C,
   DEVICE_ID,
   entry,
   folder,
@@ -120,6 +121,53 @@ describe("deterministic reconciliation planner", () => {
     expect(
       plan.blockedOperations.some((operation) => operation.code === "PATH_COLLISION_REVIEW"),
     ).toBe(true);
+  });
+
+  it("allows a remote conflict copy to vacate a path before its replacement is downloaded", () => {
+    const originalPath = "ToDo/List.md";
+    const conflictPath = "ToDo/List (conflict from Other device).md";
+    const base = manifest(1, [entry("original01", originalPath, HASH_A)]);
+    const remote = manifest(2, [
+      entry("original01", conflictPath, HASH_B, { remoteRevision: 2 }),
+      entry("preserved01", originalPath, HASH_C, { remoteRevision: 2 }),
+    ]);
+
+    const plan = planSync(planInput(base, remote, [local(originalPath, HASH_A)]));
+
+    expect(plan.localMoves).toMatchObject([
+      {
+        logicalId: "original01",
+        fromPath: originalPath,
+        toPath: conflictPath,
+      },
+    ]);
+    expect(plan.downloads.map((operation) => operation.path).sort()).toEqual(
+      [conflictPath, originalPath].sort(),
+    );
+    expect(plan.conflicts.some((conflict) => conflict.kind === "path-collision")).toBe(false);
+    expect(
+      plan.blockedOperations.some((operation) => operation.code === "PATH_COLLISION_REVIEW"),
+    ).toBe(false);
+  });
+
+  it("keeps remote rename swaps blocked because neither destination is initially vacant", () => {
+    const base = manifest(1, [
+      entry("first001", "First.md", HASH_A),
+      entry("second01", "Second.md", HASH_B),
+    ]);
+    const remote = manifest(2, [
+      entry("first001", "Second.md", HASH_A, { remoteRevision: 2 }),
+      entry("second01", "First.md", HASH_B, { remoteRevision: 2 }),
+    ]);
+    const plan = planSync(
+      planInput(base, remote, [local("First.md", HASH_A), local("Second.md", HASH_B)]),
+    );
+
+    expect(plan.localMoves).toHaveLength(2);
+    expect(plan.conflicts.filter((conflict) => conflict.kind === "path-collision")).toHaveLength(2);
+    expect(
+      plan.blockedOperations.filter((operation) => operation.code === "PATH_COLLISION_REVIEW"),
+    ).toHaveLength(2);
   });
 
   it("blocks mass deletion using the lower threshold", () => {

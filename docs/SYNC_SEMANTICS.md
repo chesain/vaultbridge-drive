@@ -50,8 +50,18 @@ Plans containing only uploads, downloads, or renames execute without a confirmat
 Deletion/tombstone creation, recovery moves, conflicts, blocked operations, permanent purges, and
 mass-deletion thresholds always require explicit review.
 
+A local path occupied by a different logical object is considered safely vacated only when the plan
+contains exactly one matching file move to a valid, uniquely targeted destination that is currently
+empty after cross-platform case folding. Folder moves, case-only moves, occupied destinations,
+multiple destinations, chains, and swaps remain blocked. This mirrors the executor ordering: file
+moves complete before staged downloads are installed.
+
 At startup and whenever Obsidian returns to the foreground, VaultBridge temporarily blocks in-app
 editing, fetches and validates the registry and remote manifest, plans against a fresh local scan,
 and applies safe remote changes before releasing the editor. The blocker is released on network or
 authentication failure so an offline device remains usable. The status indicator continues to show
 the resulting offline, action-required, conflict, or error state.
+
+Desktop uses a non-dismissible progress modal for this guard. iOS uses a transparent interaction
+shield and the persistent corner status chip, avoiding a routine full-size popup. Mandatory safety
+review remains modal on both platforms.

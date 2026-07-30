@@ -3,7 +3,16 @@ import { describe, expect, it } from "vitest";
 import { validateRelativePath } from "../../src/local/path-validator";
 import { planSync } from "../../src/sync/planner";
 import { validateManifest } from "../../src/manifest/manifest-schema";
-import { HASH_A, HASH_B, entry, local, manifest, planInput, tombstone } from "../fixtures/builders";
+import {
+  HASH_A,
+  HASH_B,
+  HASH_C,
+  entry,
+  local,
+  manifest,
+  planInput,
+  tombstone,
+} from "../fixtures/builders";
 
 const safeName = fc
   .array(fc.constantFrom(..."abcdefghijklmnopqrstuvwxyz0123456789".split("")), {
@@ -64,6 +73,51 @@ describe("planner properties", () => {
           plan.uploads.some((operation) => operation.reason.includes("Preserve the local side")),
         ).toBe(true);
         expect(plan.downloads.some((operation) => operation.kind === "conflict-copy")).toBe(true);
+      }),
+      { numRuns: 100 },
+    );
+  });
+
+  it("a uniquely vacated file path can receive a different remote logical object", () => {
+    fc.assert(
+      fc.property(fc.uniqueArray(safeName, { minLength: 2, maxLength: 2 }), ([source, target]) => {
+        const base = manifest(1, [entry("original01", source!, HASH_A)]);
+        const remote = manifest(2, [
+          entry("original01", target!, HASH_B, { remoteRevision: 2 }),
+          entry("preserved01", source!, HASH_C, { remoteRevision: 2 }),
+        ]);
+        const plan = planSync(planInput(base, remote, [local(source!, HASH_A)]));
+
+        expect(plan.localMoves).toMatchObject([
+          { logicalId: "original01", fromPath: source, toPath: target },
+        ]);
+        expect(plan.conflicts.some((conflict) => conflict.kind === "path-collision")).toBe(false);
+        expect(
+          plan.blockedOperations.some((operation) => operation.code === "PATH_COLLISION_REVIEW"),
+        ).toBe(false);
+      }),
+      { numRuns: 100 },
+    );
+  });
+
+  it("rename swaps remain blocked because neither destination is initially vacant", () => {
+    fc.assert(
+      fc.property(fc.uniqueArray(safeName, { minLength: 2, maxLength: 2 }), ([first, second]) => {
+        const base = manifest(1, [
+          entry("first001", first!, HASH_A),
+          entry("second01", second!, HASH_B),
+        ]);
+        const remote = manifest(2, [
+          entry("first001", second!, HASH_A, { remoteRevision: 2 }),
+          entry("second01", first!, HASH_B, { remoteRevision: 2 }),
+        ]);
+        const plan = planSync(
+          planInput(base, remote, [local(first!, HASH_A), local(second!, HASH_B)]),
+        );
+
+        expect(
+          plan.blockedOperations.filter((operation) => operation.code === "PATH_COLLISION_REVIEW"),
+        ).toHaveLength(2);
       }),
       { numRuns: 100 },
     );

@@ -101,6 +101,70 @@ describe("journaled executor", () => {
     expect([...local.files.keys()].some((path) => path.endsWith(".part"))).toBe(false);
   });
 
+  it("moves a tracked file to its remote conflict path before installing its replacement", async () => {
+    const originalPath = "ToDo/List.md";
+    const conflictPath = "ToDo/List (conflict from Other device).md";
+    const localBytes = new TextEncoder().encode("base content");
+    const remoteConflictBytes = new TextEncoder().encode("remote conflict content");
+    const replacementBytes = new TextEncoder().encode("preserved replacement content");
+    const localHash = await sha256(localBytes);
+    const remoteConflictHash = await sha256(remoteConflictBytes);
+    const replacementHash = await sha256(replacementBytes);
+    const localState: LocalFileState = {
+      relativePath: originalPath,
+      objectType: "file",
+      byteSize: localBytes.byteLength,
+      modifiedAt: 1234,
+      contentHash: localHash,
+    };
+    const base = manifest(1, [
+      entry("original01", originalPath, localHash, {
+        byteSize: localBytes.byteLength,
+        driveFileId: "drive_original01_123456",
+      }),
+    ]);
+    const remoteManifest = manifest(2, [
+      entry("original01", conflictPath, remoteConflictHash, {
+        byteSize: remoteConflictBytes.byteLength,
+        driveFileId: "drive_original01_123456",
+        remoteRevision: 2,
+      }),
+      entry("preserved01", originalPath, replacementHash, {
+        byteSize: replacementBytes.byteLength,
+        driveFileId: "drive_preserved01_123456",
+        remoteRevision: 2,
+      }),
+    ]);
+    const plan = planSync(planInput(base, remoteManifest, [localState]));
+    const local = new MemoryLocal({ [originalPath]: localBytes });
+    const remote = new MemoryRemote({
+      drive_original01_123456: remoteConflictBytes,
+      drive_preserved01_123456: replacementBytes,
+    });
+    const executor = new SyncExecutor(
+      local,
+      remote as unknown as VaultDriveClient,
+      manifestStore([]),
+      leaseManager(),
+      memoryStateStore(),
+    );
+
+    await executor.execute({
+      plan,
+      remoteManifest,
+      localSnapshot: snapshot([localState]),
+      vault,
+      deviceId: DEVICE_ID,
+      policy,
+    });
+
+    expect(new TextDecoder().decode(local.files.get(conflictPath))).toBe("remote conflict content");
+    expect(new TextDecoder().decode(local.files.get(originalPath))).toBe(
+      "preserved replacement content",
+    );
+    expect(plan.blockedOperations).toHaveLength(0);
+  });
+
   it("does not execute a mass-deletion plan without confirmation", async () => {
     const entries = Array.from({ length: 30 }, (_, index) =>
       entry(`id${String(index).padStart(6, "0")}`, `${index}.md`),

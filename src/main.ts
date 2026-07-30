@@ -31,6 +31,7 @@ import {
 import { VaultBridgeSettingsTab, type SettingsActions } from "./ui/settings-tab";
 import { VaultBridgeStatusBar } from "./ui/status-bar";
 import { SyncActivationModal } from "./ui/sync-activation-modal";
+import { SyncActivationShield } from "./ui/sync-activation-shield";
 
 export default class VaultBridgeDrivePlugin extends Plugin {
   private dataStore!: PluginDataStore;
@@ -47,7 +48,7 @@ export default class VaultBridgeDrivePlugin extends Plugin {
   private foregroundSync!: ForegroundSyncCoordinator;
   private events = new EventQueue();
   private status!: VaultBridgeStatusBar;
-  private activationModal: SyncActivationModal | null = null;
+  private activationGate: SyncActivationModal | SyncActivationShield | null = null;
   private activationCheckInProgress = false;
   private http!: HttpFetch;
   private phase: SyncPhase = "idle";
@@ -83,11 +84,11 @@ export default class VaultBridgeDrivePlugin extends Plugin {
         onPhase: (phase, detail) => {
           this.phase = phase;
           this.status.setPhase(phase, detail);
-          this.activationModal?.setPhase(phase, detail);
+          this.activationGate?.setPhase(phase, detail);
         },
         preview: async (plan) => {
           const restoreActivationGate =
-            this.activationCheckInProgress && this.activationModal !== null;
+            this.activationCheckInProgress && this.activationGate !== null;
           if (restoreActivationGate) this.releaseActivationGate();
           try {
             return await previewPlan(this.app, plan);
@@ -620,20 +621,22 @@ export default class VaultBridgeDrivePlugin extends Plugin {
   }
 
   private openActivationGate(phase: SyncPhase, detail?: string): void {
-    if (this.activationModal !== null) {
-      this.activationModal.setPhase(phase, detail);
+    if (this.activationGate !== null) {
+      this.activationGate.setPhase(phase, detail);
       return;
     }
-    const modal = new SyncActivationModal(this.app);
-    this.activationModal = modal;
-    modal.setPhase(phase, detail);
-    modal.open();
+    const gate = Platform.isMobileApp
+      ? new SyncActivationShield(document)
+      : new SyncActivationModal(this.app);
+    this.activationGate = gate;
+    gate.setPhase(phase, detail);
+    gate.open();
   }
 
   private releaseActivationGate(): void {
-    const modal = this.activationModal;
-    this.activationModal = null;
-    modal?.complete();
+    const gate = this.activationGate;
+    this.activationGate = null;
+    gate?.complete();
   }
 }
 
